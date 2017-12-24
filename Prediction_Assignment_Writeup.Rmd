@@ -1,0 +1,139 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Shengnan Huang"
+date: "12/23/2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## Background
+Nowadays large amount of data about personal activity can be collected relatively cheaply by devices such as Jawbone Up, Nike FuelBand, and Fitbit. With these data, people usually quantify how much of a particular activity they do, while ignore the need for quantifying how well they do it.
+
+In this project, with the data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants who were asked to perform barbell lifts correctly and incorrectly in 5 different ways, I will predict the manner in which they did the exercise using certain machine learning algorithms. The outcome variable is "classe", and we need to choose the appropriate predictors.
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har.
+
+## Basic Exploratory Data Analyses and Preprocessing
+First, we load the data sets and necessary packages
+
+```{r, cache=TRUE}
+setwd("/Users/shengnanhuang/Documents/data/Course 8, week 4/")
+training<-read.csv("./pml-training.csv")
+testing<-read.csv("./pml-testing.csv")
+library(caret)
+library(kernlab)
+set.seed(1)
+dim(training)
+dim(testing)
+```
+
+We use the data in the training variable to build and test our model, so we need to partition the data set into train and test data sets contained respectively in the training2 and testing2 variables. The data in the testing variable is used to answer the questions in the quiz.
+
+```{r, cache=TRUE}
+inTrain<-createDataPartition(training$classe,p=0.6,list=FALSE)
+training2<-training[inTrain,]
+testing2<-training[-inTrain,]
+dim(training2)
+dim(testing2)
+```
+
+For training2, we find 67 columns contain 90% of NA's.
+
+```{r, cache=TRUE}
+a<-sapply(training2, function(y) sum(length(which(is.na(y)))))
+length(a[a/dim(training2)[1]>0.9])
+```
+
+Also, there are 33 columns contain 90% of blank spaces.
+```{r, cache=TRUE}
+b<-sapply(training2, function(y) sum(y==""))
+b[is.na(b)]<-0
+length(b[b/dim(training2)[1]>0.9])
+```
+
+We delete these columns, and now we have much smaller number of predictors.
+
+```{r, cache=TRUE}
+c<-Reduce('+',list(a,b))
+d<-names(c[c==0])
+training3<-training2[d]
+names(training3)
+```
+
+The first 7 columns should not be predictors and we should delete them. Now we have a data frame with 53 columns among which "classe" is the outcome variable and the other 52 are the predictor variables.
+
+```{r, cache=TRUE}
+training3<-training3[,-(1:7)]
+dim(training3)
+```
+
+
+## Prediction Models Building
+
+### Random Forests
+
+For the cross-validation part, we divide the data set training3 into 10 folds. Then, we try a random forests model.
+
+```{r, cache=TRUE}
+fitRF<-train(classe ~.,method="rf",data=training3,trControl=trainControl(method="cv",number=10), ntree=201)
+```
+
+```{r, cache=TRUE}
+fitRF
+```
+
+We can see that the accuracy is 0.9902345, therefore the in sample error is 0.0097655. Next, we make prediction on our test data set testing3.
+
+```{r, cache=TRUE}
+testing3<-testing2[d]
+testing3<-testing3[,-(1:7)]
+predRF<-predict(fitRF, testing3)
+confRF<-confusionMatrix(predRF,testing3$classe)
+confRF
+```
+
+We can see that the accuracy is 0.9925, therefore the out of sample error is 0.0075. That implies the random forests model is pretty good.
+
+### Generalized Boosted Model
+
+Then we try the generalized boosted model.
+
+```{r, cache=TRUE,results='hide'}
+set.seed(1)
+fitGBM<-train(classe ~.,method="gbm",data=training3,trControl=trainControl(method="cv",number=10))
+```
+
+```{r, cache=TRUE}
+fitGBM
+```
+
+We can see that the accuracy is 0.9602592, therefore the in sample error is 0.0397408. Next, we make prediction on our test data set testing3.
+
+```{r, cache=TRUE}
+predGBM<-predict(fitGBM, testing3)
+confGBM<-confusionMatrix(predGBM,testing3$classe)
+confGBM
+```
+
+We can see that the accuracy is 0.9653, therefore the out of sample error is 0.0347. That means generalized boosted model is still pretty good even though the random forests model is better.
+
+## Prediction On The Test Data Set (variable: testing)
+
+Both models have very good accuracy, so we use both models to make predictions on the variable testing (to answer the questions in the quiz).
+
+### Random Forests
+
+```{r, cache=TRUE}
+predRF2<-predict(fitRF, testing)
+predRF2
+```
+
+### Generalized Boosted Model
+
+```{r, cache=TRUE}
+predGBM2<-predict(fitGBM, testing)
+predGBM2
+```
+
+Interestingly, both models give the same prediction on this test set, and the prediction proves to be correct.   
